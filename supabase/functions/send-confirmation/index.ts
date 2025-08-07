@@ -14,6 +14,7 @@ interface ConfirmationEmailRequest {
   name: string;
   email: string;
   industry: string;
+  session_id?: string;
 }
 
 const generatePersonalizedContent = async (name: string, industry: string) => {
@@ -42,7 +43,7 @@ const generatePersonalizedContent = async (name: string, industry: string) => {
     });
 
     const data = await response.json();
-    return data?.choices[1]?.message?.content;
+    return data?.choices[0]?.message?.content;
   } catch (error) {
     console.error('Error generating personalized content:', error);
     // Fallback content
@@ -57,7 +58,43 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { name, email, industry }: ConfirmationEmailRequest = await req.json();
+    const { name, email, industry, session_id }: ConfirmationEmailRequest = await req.json();
+
+    // Insert lead into Supabase leads table
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase URL or Service Role Key not set in environment variables.");
+    }
+
+    const leadInsertRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        industry,
+        session_id
+      })
+    });
+
+    if (!leadInsertRes.ok) {
+      const errorText = await leadInsertRes.text();
+      console.error("Error inserting lead into Supabase:", errorText);
+      return new Response(JSON.stringify({ error: "Failed to insert lead", details: errorText }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const insertedLead = (await leadInsertRes.json())[0];
+
+    console.log(`Inserted lead:`, insertedLead);
 
     console.log(`Generating personalized email for ${name} from ${industry} industry`);
 
@@ -75,13 +112,13 @@ const handler = async (req: Request): Promise<Response> => {
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #333; margin-bottom: 10px;">🚀 Welcome to the Innovation Revolution!</h1>
           </div>
-          
+
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white; margin-bottom: 30px;">
             <div style="font-size: 18px; line-height: 1.6;">
               ${personalizedContent.replace(/\n/g, '<br>')}
             </div>
           </div>
-          
+
           <div style="background: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 25px;">
             <h3 style="color: #333; margin-top: 0;">What's Next?</h3>
             <ul style="color: #666; line-height: 1.6;">
@@ -91,7 +128,7 @@ const handler = async (req: Request): Promise<Response> => {
               <li>📈 <strong>Transform your approach</strong> to ${industry} challenges</li>
             </ul>
           </div>
-          
+
           <div style="text-align: center; padding: 20px 0; border-top: 1px solid #eee;">
             <p style="color: #666; margin: 0;">
               Ready to revolutionize ${industry}?<br>
@@ -104,7 +141,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Personalized email sent successfully:", emailResponse);
 
-    return new Response(JSON.stringify({ success: true, emailId: emailResponse.data?.id }), {
+    return new Response(JSON.stringify({ success: true, emailId: emailResponse.data?.id, lead: insertedLead }), {
       status: 200,
       headers: {
         "Content-Type": "application/json",

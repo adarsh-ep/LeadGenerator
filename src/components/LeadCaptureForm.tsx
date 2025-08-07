@@ -6,17 +6,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { validateLeadForm, ValidationError } from '@/lib/validation';
 import { supabase } from '@/integrations/supabase/client';
 
+// Function to create lead session id
+function getOrCreateSessionId() {
+  let sessionId = localStorage.getItem('lead_session_id');
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    localStorage.setItem('lead_session_id', sessionId);
+  }
+  return sessionId;
+}
+
 export const LeadCaptureForm = () => {
   const [formData, setFormData] = useState({ name: '', email: '', industry: '' });
+  const [sessionId] = useState(getOrCreateSessionId());
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [submitted, setSubmitted] = useState(false);
-  const [leads, setLeads] = useState<
-    Array<{ name: string; email: string; industry: string; submitted_at: string }>
-  >([]);
+  const [sessionLeadCount, setSessionLeadCount] = useState(0);
 
   useEffect(() => {
     setSubmitted(false);
-  }, []);
+    // Fetch session lead count from Supabase
+    const fetchSessionLeadCount = async () => {
+      const { count, error } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', sessionId);
+      if (!error && typeof count === 'number') {
+        setSessionLeadCount(count);
+      }
+    };
+    fetchSessionLeadCount();
+  }, [sessionId]);
   const getFieldError = (field: string) => {
     return validationErrors.find(error => error.field === field)?.message;
   };
@@ -26,13 +46,33 @@ export const LeadCaptureForm = () => {
     setValidationErrors(errors);
 
     if (errors.length === 0) {
-      // Save to database
+      // Save lead to database
+      try {
+        const { error: insertError } = await supabase.from('leads').insert([
+          {
+            name: formData.name,
+            email: formData.email,
+            industry: formData.industry,
+            session_id: sessionId,
+            submitted_at: new Date().toISOString(),
+          },
+        ]);
+        if (insertError) {
+          console.error('Error saving lead:', insertError);
+          return;
+        }
+      } catch (insertException) {
+        console.error('Exception saving lead:', insertException);
+        return;
+      }
+
 try {
   const { error: emailError } = await supabase.functions.invoke('send-confirmation', {
     body: {
       name: formData.name,
       email: formData.email,
       industry: formData.industry,
+      session_id: sessionId,
     },
   });
 
@@ -45,32 +85,13 @@ try {
   console.error('Error calling email function:', emailError);
 }
 
-      // Send confirmation email
-      try {
-        const { error: emailError } = await supabase.functions.invoke('send-confirmation', {
-          body: {
-            name: formData.name,
-            email: formData.email,
-            industry: formData.industry,
-          },
-        });
-
-        if (emailError) {
-          console.error('Error sending confirmation email:', emailError);
-        } else {
-          console.log('Confirmation email sent successfully');
-        }
-      } catch (emailError) {
-        console.error('Error calling email function:', emailError);
-      }
-
       const lead = {
         name: formData.name,
         email: formData.email,
         industry: formData.industry,
-        submitted_at: new Date().toISOString(), 
+        submitted_at: new Date().toISOString(),
       };
-      setLeads([...leads, lead]);
+      setSessionLeadCount((prev) => prev + 1);
       setSubmitted(true);
       setFormData({ name: '', email: '', industry: '' });
     }
@@ -100,7 +121,7 @@ try {
           </p>
 
           <p className="text-sm text-accent mb-8">
-            You're #{leads.length} in this session
+            You're #{sessionLeadCount + (submitted ? 0 : 1)} in this session
           </p>
 
           <div className="space-y-4">
