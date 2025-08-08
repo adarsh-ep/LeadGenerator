@@ -70,9 +70,8 @@ There were two separate invocations of the send-confirmation function in the for
 ### 4. Logical changes to improve the accuracy
 The new logic ensures that:
 
-The OpenAI API response is accessed at choices[0] (not choices[1]), preventing undefined errors.
-The personalized content is always a string and is now actually included in the email body.
-If the OpenAI API fails or returns no content, a fallback message is used.
+The OpenAI API response is accessed at choices[0] (not choices[1]), preventing undefined errors. The personalized content is always a string and is now actually included in the email body. If the OpenAI API fails or returns no content, a fallback message is used. 
+
 ----------
 
 # Welcome to your Lovable project
