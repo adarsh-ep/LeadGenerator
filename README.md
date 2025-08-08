@@ -6,7 +6,9 @@ This document outlines the major bugs that were discovered and resolved in the L
 
 ### 1. Lead Entry Now Saved to Supabase Database
 **File**: [`src/components/LeadCaptureForm.tsx`](src/components/LeadCaptureForm.tsx), [`supabase/functions/send-confirmation/index.ts`](supabase/functions/send-confirmation/index.ts)
+
 **Severity**: High
+
 **Status**: ✅ Fixed
 
 #### Problem
@@ -25,7 +27,9 @@ Added code to insert lead data into the leads table in Supabase. This ensures le
 
 ### 2. Session Lead Count Now Accurate and Persistent
 **File**: [`src/components/LeadCaptureForm.tsx`](src/components/LeadCaptureForm.tsx)
+
 **Severity**: Medium
+
 **Status**: ✅ Fixed
 
 #### Problem
@@ -45,7 +49,9 @@ The session lead count was not not stored in the database, so it reset on reload
 
 ### 3. Removed Duplicate Confirmation Email API Call
 **File**: [`src/components/LeadCaptureForm.tsx`](src/components/LeadCaptureForm.tsx)
+
 **Severity**: Low
+
 **Status**: ✅ Fixed
 
 #### Problem
